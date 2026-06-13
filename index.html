@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Eco Nativo AI Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --driver: #fbbf24;
+            --client: #60a5fa;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        * { box-sizing: border-box; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        
+        body { 
+            background-color: var(--bg); color: white; margin: 0; 
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+        }
+
+        /* Header Profesional */
+        header { 
+            padding: 15px; background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px);
+            display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155;
+        }
+        .status-dot { width: 10px; height: 10px; background: #444; border-radius: 50%; margin-right: 8px; display: inline-block; }
+        .active-dot { background: var(--success); box-shadow: 0 0 10px var(--success); }
+
+        /* Pantalla de Visualización Alta para Pasajero */
+        .display-container {
+            flex: 1; display: flex; flex-direction: column; justify-content: center; 
+            padding: 30px; text-align: center; position: relative;
+        }
+        #main-display {
+            font-size: 48px; font-weight: 800; line-height: 1.2; letter-spacing: -1px;
+            transition: all 0.3s ease;
+        }
+        #sub-display { font-size: 18px; color: #94a3b8; margin-top: 20px; font-weight: 500; }
+
+        /* Panel de Frases Rápidas */
+        .quick-phrases {
+            display: flex; gap: 10px; overflow-x: auto; padding: 15px;
+            background: rgba(15, 23, 42, 0.5); scrollbar-width: none;
+        }
+        .phrase-btn {
+            background: var(--card); border: 1px solid #334155; color: white;
+            padding: 10px 20px; border-radius: 12px; white-space: nowrap; font-size: 13px;
+        }
+
+        /* Controles Inferiores */
+        .controls {
+            padding: 20px; background: var(--card); border-radius: 24px 24px 0 0;
+            box-shadow: 0 -10px 25px rgba(0,0,0,0.3);
+        }
+        .btn-main {
+            width: 100%; padding: 22px; border-radius: 16px; border: none;
+            font-size: 18px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            transition: transform 0.2s;
+        }
+        .btn-start { background: var(--accent); color: #000; }
+        .btn-stop { background: var(--danger); color: white; display: none; }
+
+        /* Selector de Idiomas */
+        .lang-bar { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
+        .l-btn { 
+            background: none; border: 2px solid transparent; filter: grayscale(0.5); 
+            font-size: 24px; transition: 0.3s; padding: 5px; cursor: pointer;
+        }
+        .l-btn.active { filter: grayscale(0); border-bottom-color: var(--accent); transform: scale(1.2); }
+
+        /* Animación de escucha */
+        .listening-driver { color: var(--driver); text-shadow: 0 0 15px rgba(251, 191, 36, 0.4); }
+        .listening-client { color: var(--client); text-shadow: 0 0 15px rgba(96, 165, 250, 0.4); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div><span id="dot" class="status-dot"></span><small id="status-text">IA OFFLINE</small></div>
+        <div style="font-weight: 900; letter-spacing: 1px;">ECO NATIVO <span style="color:var(--accent)">PRO</span></div>
+    </header>
+
+    <div class="display-container">
+        <div id="main-display">Bienvenido</div>
+        <div id="sub-display">Inicie el asistente para comenzar el viaje</div>
+    </div>
+
+    <div class="quick-phrases" id="quickPhrases">
+        <!-- Generado por JS -->
+    </div>
+
+    <div class="controls">
+        <div class="lang-bar">
+            <button class="l-btn active" onclick="changeLang('en', this)">🇺🇸</button>
+            <button class="l-btn" onclick="changeLang('fr', this)">🇫🇷</button>
+            <button class="l-btn" onclick="changeLang('de', this)">🇩🇪</button>
+            <button class="l-btn" onclick="changeLang('it', this)">🇮🇹</button>
+        </div>
+
+        <button id="btn-start" class="btn-main btn-start" onclick="toggleAI(true)">
+            ✨ ACTIVAR ASISTENTE IA
+        </button>
+        <button id="btn-stop" class="btn-main btn-stop" onclick="toggleAI(false)">
+            🛑 DETENER SISTEMA
+        </button>
+    </div>
+
+    <script>
+        let targetLang = 'en';
+        let isRunning = false;
+        let turn = 'driver'; // driver | client
+        
+        const phrases = [
+            "¿A dónde desea ir?", 
+            "Llegamos en 10 minutos", 
+            "¿Le molesta el aire acondicionado?", 
+            "El precio es el que marca el taxímetro",
+            "Muchas gracias por su viaje"
+        ];
+
+        // Configuración de Reconocimiento
+        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new Recognition();
+        rec.continuous = false;
+        rec.interimResults = false;
+
+        // Render Phrases
+        const qp = document.getElementById('quickPhrases');
+        phrases.forEach(p => {
+            const b = document.createElement('button');
+            b.className = 'phrase-btn';
+            b.innerText = p;
+            b.onclick = () => quickTranslate(p);
+            qp.appendChild(b);
+        });
+
+        function changeLang(l, el) {
+            targetLang = l;
+            document.querySelectorAll('.l-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        async function toggleAI(start) {
+            isRunning = start;
+            document.getElementById('btn-start').style.display = start ? 'none' : 'flex';
+            document.getElementById('btn-stop').style.display = start ? 'flex' : 'none';
+            document.getElementById('dot').classList.toggle('active-dot', start);
+            
+            if(start) {
+                turn = 'driver';
+                runAI();
+            } else {
+                window.speechSynthesis.cancel();
+                rec.stop();
+            }
+        }
+
+        async function runAI() {
+            if(!isRunning) return;
+
+            const isDriver = turn === 'driver';
+            rec.lang = isDriver ? 'es-ES' : getFullCode(targetLang);
+            
+            updateUI(
+                isDriver ? "ESCUCHANDO CONDUCTOR..." : "ESCUCHANDO CLIENTE...", 
+                isDriver ? "Hable ahora" : "Waiting for passenger...",
+                isDriver ? "listening-driver" : "listening-client"
+            );
+
+            try {
+                rec.start();
+            } catch(e) {}
+        }
+
+        rec.onresult = async (event) => {
+            const result = event.results[0][0];
+            const text = result.transcript;
+            const confidence = result.confidence;
+
+            // FILTRO DE CALIDAD IA: Evita inventar palabras si la confianza es baja (< 0.4)
+            if (confidence < 0.4 || text.trim().length < 2) {
+                sayError();
+                return;
+            }
+
+            const from = turn === 'driver' ? 'es' : targetLang;
+            const to = turn === 'driver' ? targetLang : 'es';
+            
+            const translated = await translateIA(text, from, to);
+            
+            updateUI(translated, text, turn === 'driver' ? "listening-client" : "listening-driver");
+
+            speak(translated, turn === 'driver' ? getFullCode(targetLang) : 'es-ES', () => {
+                if(isRunning) {
+                    turn = (turn === 'driver') ? 'client' : 'driver';
+                    setTimeout(runAI, 800);
+                }
+            });
+        };
+
+        rec.onerror = () => isRunning && setTimeout(runAI, 1000);
+
+        async function translateIA(text, from, to) {
+            try {
+                const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+                const d = await r.json();
+                return d.responseData.translatedText;
+            } catch { return "Error de red"; }
+        }
+
+        async function quickTranslate(text) {
+            window.speechSynthesis.cancel();
+            const translated = await translateIA(text, 'es', targetLang);
+            updateUI(translated, text, "listening-client");
+            speak(translated, getFullCode(targetLang), () => {
+                if(isRunning) { turn = 'client'; runAI(); }
+            });
+        }
+
+        function speak(text, lang, onEnd) {
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = lang; u.rate = 0.95;
+            u.onend = onEnd;
+            window.speechSynthesis.speak(u);
+        }
+
+        function sayError() {
+            const msg = turn === 'driver' ? "No le entendí, repita" : "Sorry, can you repeat?";
+            updateUI(msg, "Baja señal de voz", "danger");
+            speak(msg, turn === 'driver' ? 'es-ES' : getFullCode(targetLang), () => runAI());
+        }
+
+        function updateUI(main, sub, cls) {
+            const m = document.getElementById('main-display');
+            m.innerText = main;
+            m.className = "huge-text " + cls;
+            document.getElementById('sub-display').innerText = sub;
+        }
+
+        function getFullCode(l) {
+            return { 'en': 'en-US', 'fr': 'fr-FR', 'de': 'de-DE', 'it': 'it-IT' }[l];
+        }
+    </script>
+    <script src="sw-register.js"></script>
+</body>
+</html>
